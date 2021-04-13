@@ -26,8 +26,6 @@ titles:
 key: page-about
 ---
 
-## Jimi.Wu
-
  - [GitHub](https://github.com/whichname) 
  - [CSDN](https://blog.csdn.net/anyfive)
 
