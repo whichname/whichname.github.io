@@ -1,5 +1,6 @@
 ---
 layout: article
+show_title: false
 titles:
   # @start locale config
   en      : &EN       About
@@ -25,6 +26,8 @@ titles:
   # @end locale config
 key: page-about
 ---
+
+## Jimi.Wu
 
  - [GitHub](https://github.com/whichname) 
  - [CSDN](https://blog.csdn.net/anyfive)
