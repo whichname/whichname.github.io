@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-bundle exec jekyll serve --trace
+bundle exec jekyll serve --trace --drafts
