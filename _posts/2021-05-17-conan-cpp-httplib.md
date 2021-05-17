@@ -507,6 +507,56 @@ exports_sources = "httplib.h", "CMakeLists.txt", "httplibConfig.cmake.in", "spli
 >
 > [《difference between "cpp_info.libs" and "cpp_info.system_libs"》](https://github.com/conan-io/conan/issues/8104)
 
+至此，我们的打包配置文件已经修改完成了，看一眼最后的 conanfile.py:
+
+```python
+from conans import ConanFile, CMake, tools
+
+
+class HttplibConan(ConanFile):
+    # 模块信息
+    name = "httplib"
+    version = "0.8.8"
+    license = "MIT"
+    url = "https://github.com/yhirose/cpp-httplib"
+    description = "A C++11 single-file header-only cross platform HTTP/HTTPS library."
+    topics = ("conan", "cpp-httplib", "http", "https", "header-only")
+    # 模块配置
+    settings = "os", "compiler", "build_type", "arch"
+    options = {"shared": [True, False], "fPIC": [True, False], "mode": ["proxy", "default"]}
+    default_options = {"shared": False, "fPIC": True, "mode": "default"}
+    generators = "cmake"
+    # 源文件
+    exports_sources = "httplib.h", "CMakeLists.txt", "httplibConfig.cmake.in", "split.py"
+
+    def configure(self):
+        tools.check_min_cppstd(self, "11")
+
+    def config_options(self):
+        if self.settings.os == "Windows":
+            del self.options.fPIC
+    
+    # 构建方法，我们可以在这里配置构建参数，比如给 cmake 传递变量
+    def build(self):
+        cmake = CMake(self)
+        cmake.definitions["HTTPLIB_COMPILE"] = "ON"
+        if self.options.mode == "proxy":
+            cmake.definitions["MODE_PROXY"] = "ON"
+        cmake.configure()
+        cmake.build()
+        
+    # 打包，在这个方法指定的文件，都会打包到包里，比如我们需要的头文件、编译后的静态/动态库
+    def package(self):
+        self.copy("*.h", dst="include", src="out")
+        self.copy("*.a", dst="lib", keep_path=False)
+
+    # 这里可以使用 self.cpp_info 来配置使用本模块的项目，比如这里指定了使用本模块的项目要依赖 hello 这个库，这个 hello 其实是自动生成的，我们需要改成实际的库名 httplib
+    def package_info(self):
+        self.cpp_info.libs = ["httplib"]
+        self.cpp_info.system_libs = ["pthread", "z"]
+
+```
+
 ### 修改 CMakeLists.txt
 
 在 build 方法指定的只是传入 cmake 的参数，我们需要在 CMakeLists.txt 处理，生成真正的宏，直接在 CMakeLists.txt 最后加入以下几行代码:
