@@ -158,18 +158,18 @@ conan_basic_setup()''')
 上面说了，不同的 settings、options 都会构建不同的包；而我们这里需要两种模式，一种是正常的，一种是我们修改后的代理方式的，所以我们需要添加 options 来让使用方可以控制要构建哪种包。
 
 ```python
-    options = {"shared": [True, False], "fPIC": [True, False], "mode": ["proxy", "default"]}
-    default_options = {"shared": False, "fPIC": True, "mode": "default"}
+    options = {"shared": [True, False], "fPIC": [True, False], "proxy": [True, False]}
+    default_options = {"shared": False, "fPIC": True, "proxy": False}
 ```
 
-我们这里增加了 `mode` 用来让使用方指定需要构建的是哪种类型，使用字符串是为了以后方便添加别的模式；同时在 `default_options` 中指定默认的模式。
+我们这里增加了 `proxy` 用来让使用方指定是否需要构建代理模式，默认是 False.
 
 #### settings vs options
 
 settings 跟 options 有什么区别？
 
 - settings 用来指定构建平台、编译器、编译类型等，这些是定义在  `~/.conan/settings.yml` 里的；
-- options 是对包的配置，比如动态库还是静态库；一般我们需要定义自己的配置的时候，就在这里定义，比如我们这里定义的 `mode`;
+- options 是对包的配置，比如动态库还是静态库；一般我们需要定义自己的配置的时候，就在这里定义，比如我们这里定义的 `proxy`;
 
 ### 导出源码
 
@@ -209,11 +209,11 @@ exports_sources = "httplib.h", "CMakeLists.txt", "httplibConfig.cmake.in"
 
 `package_info` 方法一般用来设置 `self.cpp_info` ，使用方根据这个属性来获得使用我们这个库的一些要求，比如我们需要依赖哪些动态库、定义什么宏之类的。
 
-我们可以在这里根据使用方指定的 `mode` 来要求他定义 `MODE_PROXY` 宏。
+我们可以在这里根据使用方指定的 `proxy` 来要求他定义 `MODE_PROXY` 宏。
 
 ```python
     def package_info(self):
-        if self.options.mode == "proxy":
+        if self.options.proxy:
             self.cpp_info.defines.append("MODE_PROXY")
 ```
 
@@ -241,8 +241,8 @@ class HttplibConan(ConanFile):
     topics = ("conan", "cpp-httplib", "http", "https", "header-only")
     # 模块配置
     settings = "os", "compiler", "build_type", "arch"
-    options = {"shared": [True, False], "fPIC": [True, False], "mode": ["proxy", "default"]}
-    default_options = {"shared": False, "fPIC": True, "mode": "default"}
+    options = {"shared": [True, False], "fPIC": [True, False], "proxy": [True, False]}
+    default_options = {"shared": False, "fPIC": True, "proxy": False}
     generators = "cmake"
     # 源文件
     exports_sources = "httplib.h", "CMakeLists.txt", "httplibConfig.cmake.in"
@@ -266,7 +266,7 @@ class HttplibConan(ConanFile):
 
     # 这里可以使用 self.cpp_info 来配置使用本模块的项目，比如这里指定了使用本模块的项目要依赖 hello 这个库，这个 hello 其实是自动生成的，我们需要改成实际的库名 httplib
     def package_info(self):
-        if self.options.mode == "proxy":
+        if self.options.proxy:
             self.cpp_info.defines.append("MODE_PROXY")
             
 ```
@@ -313,7 +313,7 @@ Mode is MODE_DEFAULT
 
 #### 命令行指定 options
 
-我们直接给 `conan create` 加上 options : `conan create . demo/testing --options httplib:mode=proxy`， 也可以使用通配符 `*:mode=proxy`，运行输出为:
+我们直接给 `conan create` 加上 options : `conan create . demo/testing --options httplib:proxy=True`， 也可以使用通配符 `*:proxy=True`，运行输出为:
 
 ```shell
 Mode is MODE_PROXY
@@ -338,8 +338,8 @@ compiler.libcxx=libc++
 compiler.cppstd=11
 build_type=Release
 [options]
-# 这里也可以使用 *:mode=proxy:
-httplib:mode=proxy
+# 这里也可以使用 *:proxy=True:
+httplib:proxy=True
 [build_requires]
 [env]
 ```
@@ -476,7 +476,7 @@ exports_sources = "httplib.h", "CMakeLists.txt", "httplibConfig.cmake.in", "spli
     def build(self):
         cmake = CMake(self)
         cmake.definitions["HTTPLIB_COMPILE"] = "ON"
-        if self.options.mode == "proxy":
+        if self.options.proxy:
             cmake.definitions["MODE_PROXY"] = "ON"
         cmake.configure()
         cmake.build()
@@ -522,8 +522,8 @@ class HttplibConan(ConanFile):
     topics = ("conan", "cpp-httplib", "http", "https", "header-only")
     # 模块配置
     settings = "os", "compiler", "build_type", "arch"
-    options = {"shared": [True, False], "fPIC": [True, False], "mode": ["proxy", "default"]}
-    default_options = {"shared": False, "fPIC": True, "mode": "default"}
+    options = {"shared": [True, False], "fPIC": [True, False], "proxy": [True, False]}
+    default_options = {"shared": False, "fPIC": True, "proxy": True}
     generators = "cmake"
     # 源文件
     exports_sources = "httplib.h", "CMakeLists.txt", "httplibConfig.cmake.in", "split.py"
@@ -539,7 +539,7 @@ class HttplibConan(ConanFile):
     def build(self):
         cmake = CMake(self)
         cmake.definitions["HTTPLIB_COMPILE"] = "ON"
-        if self.options.mode == "proxy":
+        if self.options.proxy:
             cmake.definitions["MODE_PROXY"] = "ON"
         cmake.configure()
         cmake.build()
@@ -578,7 +578,7 @@ endif()
 
 ### 运行 proxy 模式
 
-我们再来运行一下 `conan create . demo/testing  --options httplib:mode=proxy`，输出如下：
+我们再来运行一下 `conan create . demo/testing  --options httplib:proxy=True`，输出如下：
 
 ```
 Mode is MODE_DEFAULT
