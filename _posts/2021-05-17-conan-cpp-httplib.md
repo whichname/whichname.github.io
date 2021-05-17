@@ -512,7 +512,6 @@ exports_sources = "httplib.h", "CMakeLists.txt", "httplibConfig.cmake.in", "spli
 ```python
 from conans import ConanFile, CMake, tools
 
-
 class HttplibConan(ConanFile):
     # 模块信息
     name = "httplib"
