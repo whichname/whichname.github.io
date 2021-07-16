@@ -146,7 +146,13 @@ public Handler(Callback callback, boolean async) {
 3. nativePollOne 会调用对应的 NativeMessageQueue 的 pollOnce 方法
 4. NativeMessageQueue::pollOnce 又会调用 native 层的 Looper::pollOnce 方法
 5. native 的 Looper::pollOnce 最后会调用到 Looper::pollInner 方法
-6. 在 Looper::pollInner 方法内部，会调用 epoll_wait 监听可读事件，如果是被可读事件唤醒的，还会去读取写入 eventfd 的数据
+6. 在 Looper::pollInner 方法内部：
+   1. 首先会计算阻塞时间，由 java 层传入的时间 和 native 层下个消息的阻塞时间 的最小值决定
+   2. 会调用 epoll_wait 监听所有事件
+   3. 如果是被 EPOLLIN 事件唤醒的，去读取写入 eventfd 的数据
+   4. 如果是被其他事件唤醒的，就尝试用 fd 拿 Request，拿到的话加到 mResponses 中
+   5. 处理 native 层的 Message，跟 java 层的逻辑差不多；到时间的消息就分发；没到就直接获取队列第一个，保存需要执行的时间点，然后退出队列循环；因为队列本身就是按执行时间排序的
+   6. 最后执行第 4 步的 mResponses 内的 LooperCallback，比如触摸事件
 7. 回到 java 层，这时候 nativePollOnce  方法的阻塞已经结束了，便可以继续本次循环获得消息
 8. 获得消息后，会调用 Message.target 也就是对应的 handler 的 dispatchMessage 方法分发消息
 9. Handler::dispatchMessage 方法会先按顺序分发消息
@@ -297,8 +303,18 @@ int Looper::pollOnce(int timeoutMillis, int* outFd, int* outEvents, void** outDa
 }
 
 int Looper::pollInner(int timeoutMillis) {
+  	// 计算要阻塞多久，以 java 层传入的 timeout 和 native 层下个消息的延时的最小值决定
+    // 这里如果是 native 层的消息延时，执行完成后又会回到 java，然后重新算出 timeout 传入
+    if (timeoutMillis != 0 && mNextMessageUptime != LLONG_MAX) {
+        nsecs_t now = systemTime(SYSTEM_TIME_MONOTONIC);
+        int messageTimeoutMillis = toMillisecondTimeoutDelay(now, mNextMessageUptime);
+        if (messageTimeoutMillis >= 0
+                && (timeoutMillis < 0 || messageTimeoutMillis < timeoutMillis)) {
+            timeoutMillis = messageTimeoutMillis;
+        }
+    }
     ...
-    // 等待可读事件，如果没有将阻塞，直到有可读事件或者超时
+    // 等待 epoll 事件，如果没有将阻塞
     int eventCount = epoll_wait(mEpollFd.get(), eventItems, EPOLL_MAX_EVENTS, timeoutMillis);
   	...
     mLock.lock();
@@ -308,16 +324,69 @@ int Looper::pollInner(int timeoutMillis) {
         uint32_t epollEvents = eventItems[i].events;
         if(fd == mWakeEventFd.get()) {
             if (epollEvents & EPOLLIN) {
-                // 是由于收到事件醒来的
+                // 是被写事件唤醒的，读取内容
                 awoken();
+            }
+            ...
+        } else {
+            // 将通过 addFd 方法加入进来的 LooperCallback 加入 vector 中，比如触摸事件
+            ssize_t requestIndex = mRequests.indexOfKey(fd);
+            if (requestIndex >= 0) {
+                int events = 0;
+                if (epollEvents & EPOLLIN) events |= EVENT_INPUT;
+                if (epollEvents & EPOLLOUT) events |= EVENT_OUTPUT;
+                if (epollEvents & EPOLLERR) events |= EVENT_ERROR;
+                if (epollEvents & EPOLLHUP) events |= EVENT_HANGUP;
+                pushResponse(events, mRequests.valueAt(requestIndex));
             }
             ...
         }
         ...
     }
     ...
+    // 处理 native 层的消息，这部分逻辑跟 java 层其实差不多
+    mNextMessageUptime = LLONG_MAX;
+    while (mMessageEnvelopes.size() != 0) {
+        nsecs_t now = systemTime(SYSTEM_TIME_MONOTONIC);
+        const MessageEnvelope& messageEnvelope = mMessageEnvelopes.itemAt(0);
+        if (messageEnvelope.uptime <= now) {
+            { // obtain handler
+                sp<MessageHandler> handler = messageEnvelope.handler;
+                Message message = messageEnvelope.message;
+                mMessageEnvelopes.removeAt(0);
+                mSendingMessage = true;
+                mLock.unlock();
+                // 分发消息
+                handler->handleMessage(message);
+            } // release handler
+            mLock.lock();
+            mSendingMessage = false;
+            result = POLL_CALLBACK;
+        } else {
+            // 下一个消息执行的事件点，消息队列是按时间顺序排列的
+            // 所以一碰到需要阻塞的消息，就可以直接赋值并退出循环了
+            mNextMessageUptime = messageEnvelope.uptime;
+            break;
+        }
+    }
     mLock.unlock();
-    ...
+    // 处理通过 addFd 传入的 LooperCallback，比如触摸事件
+    for (size_t i = 0; i < mResponses.size(); i++) {
+        Response& response = mResponses.editItemAt(i);
+        if (response.request.ident == POLL_CALLBACK) {
+            int fd = response.request.fd;
+            int events = response.events;
+            void* data = response.request.data;
+            // 执行 LooperCallback
+            int callbackResult = response.request.callback->handleEvent(fd, events, data);
+            if (callbackResult == 0) {
+                removeFd(fd, response.request.seq);
+            }
+            response.request.callback.clear();
+            result = POLL_CALLBACK;
+        }
+    }
+    return result;
 }
 
 void Looper::awoken() {
@@ -460,6 +529,116 @@ void Looper::wake() {
     // 写入一个 1 到 eventfd, 然后 Looper.loop 那边的 epoll 就会收到消息，从而退出阻塞唤醒线程
     ssize_t nWrite = TEMP_FAILURE_RETRY(write(mWakeEventFd.get(), &inc, sizeof(uint64_t)));
     ...
+}
+```
+
+### native 层的消息
+
+native 层唤醒 epoll 有两个方法，一个是通过 `addFd` 方法，一个是通过 `sendMessage` 系列方法来唤醒；
+
+#### Looper.cpp ( addFd )
+
+```c++
+int Looper::addFd(int fd, int ident, int events, Looper_callbackFunc callback, void* data) {
+    return addFd(fd, ident, events, callback ? new SimpleLooperCallback(callback) : nullptr, data);
+}
+
+int Looper::addFd(int fd, int ident, int events, const sp<LooperCallback>& callback, void* data) {
+    ...
+    if (!callback.get()) {
+        // 不允许设置空的 LooperCallback
+        if (! mAllowNonCallbacks) {
+            ALOGE("Invalid attempt to set NULL callback but not allowed for this looper.");
+            return -1;
+        }
+        if (ident < 0) {
+            ALOGE("Invalid attempt to set NULL callback with ident < 0.");
+            return -1;
+        }
+    } else {
+        ident = POLL_CALLBACK;
+    }
+
+    { // acquire lock
+        AutoMutex _l(mLock);
+        ...
+        // 看当前表中有没有该 fd 对应的 Request
+        ssize_t requestIndex = mRequests.indexOfKey(fd); 
+        if (requestIndex < 0) {
+            // 没有的话，直接发送 EPOLL_CTL_ADD 唤醒对应线程
+            int epollResult = epoll_ctl(mEpollFd.get(), EPOLL_CTL_ADD, fd, &eventItem);
+            if (epollResult < 0) {
+                ALOGE("Error adding epoll events for fd %d: %s", fd, strerror(errno));
+                return -1;
+            }
+            // 先唤醒再加入表中，因为这里用了 mLock，所以不用担心错误遍历时机
+            mRequests.add(fd, request);
+        } else {
+            // 如果已经有了，发送 EPOLL_CTL_MOD 事件
+            int epollResult = epoll_ctl(mEpollFd.get(), EPOLL_CTL_MOD, fd, &eventItem);
+            if (epollResult < 0) {
+                if (errno == ENOENT) {
+                    // 如果 fd 已经被移除了，就发送 EPOLL_CTL_ADD 事件
+                    epollResult = epoll_ctl(mEpollFd.get(), EPOLL_CTL_ADD, fd, &eventItem);
+                    if (epollResult < 0) {
+                        ALOGE("Error modifying or adding epoll events for fd %d: %s",
+                                fd, strerror(errno));
+                        return -1;
+                    }
+                    scheduleEpollRebuildLocked();
+                } else {
+                    ALOGE("Error modifying epoll events for fd %d: %s", fd, strerror(errno));
+                    return -1;
+                }
+            }
+            // 替换表内的 Request
+            mRequests.replaceValueAt(requestIndex, request);
+        }
+    } // release lock
+    return 1;
+}
+
+```
+
+`addFd` 就是通过 `EPOLL_CTL_ADD` 或者 `EPOLL_CTL_MOD` 来唤醒线程，跟正常调用 `wake` 方法写入唤醒的 `EPOLLIN` 事件是不同的。
+
+#### Looper.cpp ( sendMessage )
+
+```c++
+void Looper::sendMessage(const sp<MessageHandler>& handler, const Message& message) {
+    nsecs_t now = systemTime(SYSTEM_TIME_MONOTONIC);
+    sendMessageAtTime(now, handler, message);
+}
+
+void Looper::sendMessageDelayed(nsecs_t uptimeDelay, const sp<MessageHandler>& handler,
+        const Message& message) {
+    nsecs_t now = systemTime(SYSTEM_TIME_MONOTONIC);
+    sendMessageAtTime(now + uptimeDelay, handler, message);
+}
+
+void Looper::sendMessageAtTime(nsecs_t uptime, const sp<MessageHandler>& handler,
+        const Message& message) {
+    ...
+    size_t i = 0;
+    { // acquire lock
+        AutoMutex _l(mLock);
+        // 按时间顺序，找到要插入的位置并插入
+        size_t messageCount = mMessageEnvelopes.size();
+        while (i < messageCount && uptime >= mMessageEnvelopes.itemAt(i).uptime) {
+            i += 1;
+        }
+        MessageEnvelope messageEnvelope(uptime, handler, message);
+        mMessageEnvelopes.insertAt(messageEnvelope, i, 1);
+      
+        // 如果当前正在分发消息，就不调用 wake 方法，因为在遍历消息的时候会遍历到这个消息，也是通过 mLock 来控制并发的
+        if (mSendingMessage) {
+            return;
+        }
+    } // release lock
+    // 如果 i 等于 0，说明插入到队列头了，那就要唤醒了，否则不需要唤醒
+    if (i == 0) {
+        wake();
+    }
 }
 ```
 
