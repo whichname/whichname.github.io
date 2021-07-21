@@ -10,7 +10,7 @@ Activity 的启动流程其实看了几遍，但是发现容易忘，所以在�
 
 本次分析基于 Android Api 28.
 
-### 客户端进程
+## 客户端进程
 
 #### Activity.java
 
@@ -74,7 +74,7 @@ Activity 的启动流程其实看了几遍，但是发现容易忘，所以在�
             };
 ```
 
-### system_server 进程
+## system_server 进程
 
 #### ActivityManagerService.java
 
@@ -345,7 +345,7 @@ Activity 的启动流程其实看了几遍，但是发现容易忘，所以在�
     }
 ```
 
-### 客户端进程
+## 客户端进程
 
 #### ActivityThread.java
 
@@ -467,6 +467,9 @@ public final class ActivityThread extends ClientTransactionHandler {
                     mInstrumentation.callActivityOnCreate(activity, r.state);
                 }
                 ...
+                // 设置当前状态为 ON_CREATE
+                r.setState(ON_CREATE);
+                ...
     }
 ```
 
@@ -514,6 +517,201 @@ public final class ActivityThread extends ClientTransactionHandler {
         } else {
             onCreate(icicle);
         }
+        ...
+    }
+```
+
+以上就是调用到 `Activity::onCreate()` 的调用链，接下来，继续分析 `Activity::onStart()` 和 `Activity::onResume()` 的调用链。
+
+### Activity::onStart()
+
+上面 [ `TransactionExecutor::execute()`](#transactionexecutorjava) 方法中，会先调用 `executeCallbacks()` 执行 `LaunchActivityItem`，最后到 `Activity::attach()` 和 `Activity::onCreate()`; 然后调用 `executeLifecycleState` :
+
+#### TransactionExecutor.java
+
+```java
+    private void executeLifecycleState(ClientTransaction transaction) {
+        final ActivityLifecycleItem lifecycleItem = transaction.getLifecycleStateRequest();
+        ...
+        // 这里会根据 activity 的当前状态和目标状态，按需要去执行对应的生命周期方法，比如这里最后会调用 onStart
+        // lifecycleItem 就是 ResumeActivityItem , lifecycleItem.getTargetState() 就是 ON_RESUME
+        cycleToPath(r, lifecycleItem.getTargetState(), true);
+        // 执行 ResumeActivityItem
+        lifecycleItem.execute(mTransactionHandler, token, mPendingActions);
+        ...
+    }
+
+    private void cycleToPath(ActivityClientRecord r, int finish,
+            boolean excludeLastState) {
+        // 在上面的 ActivityThread::performLaunchActivity() 中，会调用 ActivityClientRecord::setState(ON_CREATE) 方法设置状态
+        // 所以这里是 ON_CREATE
+        final int start = r.getLifecycleState();
+        // start 是 ON_CREATE, finish 是 ON_RESUME
+        final IntArray path = mHelper.getLifecyclePath(start, finish, excludeLastState);
+        // 这里最后会调用 Activity::onStart()
+        performLifecycleSequence(r, path);
+    }
+```
+
+#### ActivityLifecycleItem.java
+
+```java
+    // 各个状态的定义
+    public static final int UNDEFINED = -1;
+    public static final int PRE_ON_CREATE = 0;
+    public static final int ON_CREATE = 1;
+    public static final int ON_START = 2;
+    public static final int ON_RESUME = 3;
+    public static final int ON_PAUSE = 4;
+    public static final int ON_STOP = 5;
+    public static final int ON_DESTROY = 6;
+    public static final int ON_RESTART = 7;
+```
+
+#### TransactionExecutorHelper.java
+
+```java
+    public IntArray getLifecyclePath(int start, int finish, boolean excludeLastState) {
+        ...
+        mLifecycleSequence.clear();
+        if (finish >= start) {
+            // 这里 start 是 ON_CREATE = 1, finish 是 ON_RESUME = 3，所以 mLifecycleSequence 变成 [2, 3]
+            for (int i = start + 1; i <= finish; i++) {
+                mLifecycleSequence.add(i);
+            }
+        } else {
+            ...
+        }
+        // excludeLastState 传入是 true，会移除最后一个，最终 mLifecycleSequence 是 [ 2 ]，也就是 [ ON_START ]
+        if (excludeLastState && mLifecycleSequence.size() != 0) {
+            mLifecycleSequence.remove(mLifecycleSequence.size() - 1);
+        }
+        return mLifecycleSequence;
+    }
+```
+
+#### TransactionExecutor.java
+
+```java
+    // 继续看这个方法，传入的 path 是 [ ON_START ]
+    private void performLifecycleSequence(ActivityClientRecord r, IntArray path) {
+        final int size = path.size();
+        for (int i = 0, state; i < size; i++) {
+            state = path.get(i);
+            switch (state) {
+                ...
+                case ON_START:
+                    // 上面说了，mTransactionHandler 是构造时传入的 ActivityThread 对象
+                    mTransactionHandler.handleStartActivity(r, mPendingActions);
+                    break;
+                ...
+            }
+        }
+    }
+```
+
+#### ActivityThread.java
+
+```java
+    public void handleStartActivity(ActivityClientRecord r,
+            PendingTransactionActions pendingActions) {
+        ...
+        activity.performStart("handleStartActivity");
+        // 设置当前状态为 ON_START
+        r.setState(ON_START);
+        ...
+    }
+```
+
+#### Activity.java
+
+```java
+    final void performStart(String reason) {
+        ...
+        mInstrumentation.callActivityOnStart(this);
+        ...
+    }
+```
+
+#### Instrumentation.java
+
+```java
+    public void callActivityOnStart(Activity activity) {
+        // 调用 onStart
+        activity.onStart();
+    }
+```
+
+### Activity::onResume()
+
+接下来继续看 [ `TransactionExecutor::executeLifecycleState()`](#transactionexecutorjava-1) ,  其中 `cycleToPath()` 方法会调用到 `Activity::onStart()` ，而 `lifecycleItem.execute()` 执行的是 `ResumeActivityItem::execute()` 方法：
+
+#### ResumeActivityItem.java
+
+```java
+    public void execute(ClientTransactionHandler client, IBinder token,
+            PendingTransactionActions pendingActions) {
+        ...
+        // client 就是 ActivityThread
+        client.handleResumeActivity(token, true /* finalStateRequest */, mIsForward,
+                "RESUME_ACTIVITY");
+        ...
+    }
+```
+
+#### ActivityThread.java
+
+```java
+    public void handleResumeActivity(IBinder token, boolean finalStateRequest, boolean isForward,
+            String reason) {
+        ...
+        final ActivityClientRecord r = performResumeActivity(token, finalStateRequest, reason);
+        if (r == null) {
+            return;
+        }
+        ...
+        final Activity a = r.activity;
+        ...
+        // 创建 ViewRootImpl 等渲染流程
+        if (r.window == null && !a.mFinished && willBeVisible) {
+            r.window = r.activity.getWindow();
+            View decor = r.window.getDecorView();
+            decor.setVisibility(View.INVISIBLE);
+            ViewManager wm = a.getWindowManager();
+            WindowManager.LayoutParams l = r.window.getAttributes();
+            a.mDecor = decor;
+            ...
+            wm.addView(decor, l);
+            ...
+            }
+        }
+        ...
+    }
+
+    public ActivityClientRecord performResumeActivity(IBinder token, boolean finalStateRequest,
+            String reason) {
+        ...
+        r.activity.performResume(r.startsNotResumed, reason);
+        ...
+    }
+```
+
+#### Activity.java
+
+```java
+    final void performResume(boolean followedByPause, String reason) {
+        ...
+        mInstrumentation.callActivityOnResume(this);
+        ...
+    }
+```
+
+#### Instrumentation.java
+
+```java
+    public void callActivityOnResume(Activity activity) {
+        activity.mResumed = true;
+        activity.onResume();
         ...
     }
 ```
