@@ -386,6 +386,7 @@ public final class ActivityThread extends ClientTransactionHandler {
                 case EXECUTE_TRANSACTION:
                     final ClientTransaction transaction = (ClientTransaction) msg.obj;
                     mTransactionExecutor.execute(transaction);
+                    break;
                 ...
         }
     }
