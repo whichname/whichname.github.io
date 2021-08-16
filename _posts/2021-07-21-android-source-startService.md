@@ -4,9 +4,9 @@ tags: ["android-source"]
 key: startService
 ---
 
-<!--more-->
-
 在此记录一下 Service 启动的调用链，本次分析基于 Android Api 28.
+
+<!--more-->
 
 ## `Service::onCreate()`
 

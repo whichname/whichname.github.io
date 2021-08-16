@@ -4,11 +4,11 @@ tags: ["android-source"]
 key: startActivity
 ---
 
-<!--more-->
-
 Activity 的启动流程其实看了几遍，但是发现容易忘，所以在这里记录一下调用链，方便以后回顾。
 
 本次分析基于 Android Api 28.
+
+<!--more-->
 
 ## 客户端进程
 
