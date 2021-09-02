@@ -93,6 +93,8 @@ mmap 信息数据( {"logan_version": 3, "file": "xxxx" }\0 )
 
 ### 初始化
 
+![clogan_init 流程](/assets/images/logan/clogan_init.png)
+
 #### clogan_init
 
 clogan_core.c
@@ -504,6 +506,8 @@ void write_dest_clogan(void *point, size_t size, size_t length, cLogan_model *lo
 
 ### 打开日志文件
 
+![clogan_open 流程](/assets/images/logan/clogan_open.png)
+
 #### clogan_open
 
 `clogan_open` 主要做几件事：
@@ -702,6 +706,8 @@ void restore_last_position_clogan(cLogan_model *model) {
 这里结合上面的 [loganmmap2-数据结构](#loganmmap2-数据结构) 也很好理解。
 
 ### 写日志
+
+![clogan_write 流程](/assets/images/logan/clogan_write.png)
 
 #### clogan_write
 
@@ -1095,6 +1101,8 @@ void clogan_zlib_end_compress(cLogan_model *model) {
 
 
 ### flush
+
+![clogan_flush 流程](/assets/images/logan/clogan_flush.png)
 
 #### clogan_flush
 
