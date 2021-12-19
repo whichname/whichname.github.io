@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>快来看看我的狗年转运签</title>
+    <link type="favicon" rel="shortcut icon" href="img/favicon.ico" />
+    <meta name="description" content="物只卤鹅帮你解签！！！！" />
+    <meta name="viewport"
+          content="width=device-width, height=device-height, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+    <link rel="stylesheet" href="test_2018.css"/>
+
+    <script type="text/javascript" src="https://apps.bdimg.com/libs/jquery/2.1.4/jquery.min.js"></script>
+    <script type="text/javascript" src="test_2018.js"></script>
+
+    <!--weui-->
+    <link rel="stylesheet" href="https://res.wx.qq.com/open/libs/weui/1.1.2/weui.min.css">
+    <script type="text/javascript" src="https://res.wx.qq.com/open/libs/weuijs/1.1.3/weui.min.js"></script>
+
+    <script>
+        var _hmt = _hmt || [];
+        (function() {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?50fb72f1c4e3473ae695f33a9667c2ab";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+
+
+</head>
+<body>
+
+<img src="img/logo.png" class="logo"/>
+
+<!--抽签页-->
+<div id="selectRoot">
+    <!--条件选择-->
+    <div id="selectParent">
+        <div class="input-root">
+            <div class="label-root">
+                <p>您的姓名</p>
+                <p>Your name</p>
+            </div>
+            <input id="name" type="text" class="input" placeholder="卤鹅弟" maxlength="4"/>
+        </div>
+        <div class="input-root">
+            <div class="label-root">
+                <p>出生年份</p>
+                <p>Year of birth</p>
+            </div>
+            <input id="pickerYear" type="button" class="input input-placeholder" placeholder="点击选择" value="1990"/>
+        </div>
+    </div>
+    <!--下一步-->
+    <div class="btn-submit">
+        <input id="submit" type="button" value="抽签" class="btn-submit-text" onclick="_hmt.push(['_trackEvent', 'button', 'click', 'toResult'])"/>
+    </div>
+</div>
+
+<!--结果页-->
+<div id="resultRoot">
+    <!--链接-->
+    <div class="a-root">
+        <a onclick="_hmt.push(['_trackEvent', 'weixin', 'click', 'article'])" href="https://mp.weixin.qq.com/s/UkYlE3xTVYakwTwCp5pgEg">猛戳年度最火年货</a>
+    </div>
+    <!--描述-->
+    <p>分享给微信好友/朋友圈</p>
+    <p>长按上图即可保存图片</p>
+    <!--结果-->
+    <div id="result-img-root">
+
+    </div>
+</div>
+
+
+</body>
+</html>
