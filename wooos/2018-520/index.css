@@ -1,0 +1,217 @@
+* {
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
+body {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    overflow: hidden;
+}
+
+input:focus {
+    outline: none;
+}
+
+/*页面*/
+.page {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+}
+
+/*启动页*/
+#page-launch {
+    background: url("img/bg_page_launch.png") no-repeat center;
+    background-size: 100% 100%;
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    top: 0;
+}
+#btn-create-now {
+    width: 38.5%;
+    margin-bottom: 32%;
+}
+
+
+/*信息页*/
+#page-info {
+    background-color: #11111d;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: white;
+    font-size: 21px;
+    top: 100%;
+}
+.avatar {
+    width: 22%;
+    border-radius: 100%;
+    margin-top: 10.7%;
+}
+/*昵称*/
+.input-name-root {
+    width: 100%;
+    height: 6%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    margin-top: 15.3%;
+}
+.input-name {
+    width: 62%;
+    height: 100%;
+    margin-left: 3%;
+    border-radius: 5px;
+    background-color: #191925;
+    font-size: 21px;
+    padding: 0 10px;
+    color: white;
+    box-sizing: border-box;
+}
+input.input-name.input-placeholder {
+    color: rgba(255, 255, 255, 0.25);
+}
+/*情话*/
+.input-msg-root {
+    width: 100%;
+    height: 6%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    margin-top: 5.3%;
+}
+.input-msg-parent {
+    width: 62%;
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    position: relative;
+    margin-left: 3%;
+}
+.input-msg {
+    width: 78%;
+    border-radius: 5px 0 0 5px;
+    padding: 0 10px;
+    background-color: #191925;
+    font-size: 21px;
+    color: white;
+}
+.btn-down {
+    width: 20%;
+    background: #191925 url("img/btn_down.png") no-repeat center;
+    background-size: 39% auto;
+    height: 100%;
+    border-radius: 0 5px 5px 0;
+    margin-left: 2%;
+}
+.label-msg {
+    width: 100%;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.25);
+    position: absolute;
+    top: 115%;
+    white-space: nowrap;
+}
+.list-msg {
+    position: absolute;
+    width: 100%;
+    background-color: #191925;
+    border-radius: 5px;
+    display: flex;
+    flex-direction: column;
+    top: 115%;
+    box-shadow: 0 0 25px 5px rgba(0,0,0,0.2);
+    z-index: 1000;
+}
+.item-msg {
+    color: rgba(255, 255, 255, 0.25);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow:ellipsis;
+    padding: 5px 10px;
+}
+/*图片*/
+.input-img-root {
+    width: 100%;
+    height: 26%;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    margin-top: 10%;
+}
+.input-img-label-root {
+    height: 23%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.input-img {
+    width: 62%;
+    height: 100%;
+    margin-left: 3%;
+    position: relative;
+}
+.icon-img {
+    height: 100%;
+    background: #191925 url("img/btn_camera.png") no-repeat center;
+    background-size: 38%;
+    position: absolute;
+}
+.input-img canvas {
+    height: 100%;
+    position: absolute;
+}
+/*生成海报*/
+#btn-create-post {
+    width: 38.5%;
+    margin-top: 13.3%;
+}
+
+
+/*结果页*/
+#page-result {
+    background: url("img/bg_page_result.png") no-repeat center;
+    background-size: 100% 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    top: 100%;
+    position: relative;
+}
+.bg-post {
+    background: url("img/bg_pic.png") no-repeat center;
+    background-size: 100% 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 56.4%;
+    margin-top: 5%;
+}
+.save {
+    width: 100%;
+    background: url("img/label_save.png") no-repeat center;
+    background-size: 100%;
+}
+
+/*动效*/
+.page {
+    transition:top 250ms linear;
+}
+
+.weui-toast {
+    z-index: 10000;
+}
+.weui-mask_transparent {
+    background: rgba(0, 0, 0, 0.46);
+    z-index: 999;
+}
